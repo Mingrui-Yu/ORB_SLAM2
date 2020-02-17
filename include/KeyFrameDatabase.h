@@ -63,7 +63,8 @@ protected:
   const ORBVocabulary* mpVoc;
 
   // Inverted file
-  std::vector<list<KeyFrame*> > mvInvertedFile;
+  std::vector<list<KeyFrame*> > mvInvertedFile;  
+  // list 双向链表，允许快速的插入和删除，但随机访问较慢
 
   // Mutex
   std::mutex mMutex;

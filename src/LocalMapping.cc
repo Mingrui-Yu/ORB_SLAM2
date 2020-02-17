@@ -552,6 +552,7 @@ cv::Mat LocalMapping::ComputeF12(KeyFrame *&pKF1, KeyFrame *&pKF2)
     return K1.t().inv()*t12x*R12*K2.inv();
 }
 
+// Localization 模式下，需要关闭 LocalMapping线程
 void LocalMapping::RequestStop()
 {
     unique_lock<mutex> lock(mMutexStop);
@@ -585,6 +586,7 @@ bool LocalMapping::stopRequested()
     return mbStopRequested;
 }
 
+//  清空 KeyFrames
 void LocalMapping::Release()
 {
     unique_lock<mutex> lock(mMutexStop);

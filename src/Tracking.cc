@@ -121,6 +121,7 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
     if(sensor==System::STEREO)
         mpORBextractorRight = new ORBextractor(nFeatures,fScaleFactor,nLevels,fIniThFAST,fMinThFAST);
 
+    // 创建 ORB extractor 对象
     if(sensor==System::MONOCULAR)
         mpIniORBextractor = new ORBextractor(2*nFeatures,fScaleFactor,nLevels,fIniThFAST,fMinThFAST);
 
@@ -239,7 +240,7 @@ cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
 {
     mImGray = im;
 
-    if(mImGray.channels()==3)
+    if(mImGray.channels()==3)   // 将 RGB 图像 转换为 灰度图像
     {
         if(mbRGB)
             cvtColor(mImGray,mImGray,CV_RGB2GRAY);
@@ -254,9 +255,12 @@ cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
             cvtColor(mImGray,mImGray,CV_BGRA2GRAY);
     }
 
-    if(mState==NOT_INITIALIZED || mState==NO_IMAGES_YET)
+    if(mState==NOT_INITIALIZED || mState==NO_IMAGES_YET)  // 创建 Tracking 线程的时候，默认 mState 为 NO_IMAGES_YET
+        // 如果是刚刚要初始化
+        // 为当前帧 创建一个 Frame 对象
         mCurrentFrame = Frame(mImGray,timestamp,mpIniORBextractor,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
     else
+        // 如果已经初始化过了
         mCurrentFrame = Frame(mImGray,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
 
     Track();
@@ -266,7 +270,7 @@ cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
 
 void Tracking::Track()
 {
-    if(mState==NO_IMAGES_YET)
+    if(mState==NO_IMAGES_YET)  // tracking state 从 NO_IMAGES_YET 转换为 NOT_INITIALIZED
     {
         mState = NOT_INITIALIZED;
     }
@@ -281,7 +285,7 @@ void Tracking::Track()
         if(mSensor==System::STEREO || mSensor==System::RGBD)
             StereoInitialization();
         else
-            MonocularInitialization();
+            MonocularInitialization();  // 进行单目的初始化
 
         mpFrameDrawer->Update(this);
 
@@ -485,6 +489,8 @@ void Tracking::Track()
         mLastFrame = Frame(mCurrentFrame);
     }
 
+    // 如果是刚刚初始化，就直接跳到这里了
+
     // Store frame pose information to retrieve the complete camera trajectory afterwards.
     if(!mCurrentFrame.mTcw.empty())
     {
@@ -560,34 +566,36 @@ void Tracking::StereoInitialization()
     }
 }
 
-void Tracking::MonocularInitialization()
+void Tracking::MonocularInitialization()  // 单目 初始化 
 {
 
-    if(!mpInitializer)
+    if(!mpInitializer)  // 第一帧：做初始化的准备工作
     {
         // Set Reference Frame
-        if(mCurrentFrame.mvKeys.size()>100)
+        if(mCurrentFrame.mvKeys.size()>100)  // 如果当前帧有超过100个特征点
         {
             mInitialFrame = Frame(mCurrentFrame);
             mLastFrame = Frame(mCurrentFrame);
-            mvbPrevMatched.resize(mCurrentFrame.mvKeysUn.size());
-            for(size_t i=0; i<mCurrentFrame.mvKeysUn.size(); i++)
-                mvbPrevMatched[i]=mCurrentFrame.mvKeysUn[i].pt;
+            mvbPrevMatched.resize(mCurrentFrame.mvKeysUn.size());  // mvbPrevMatched: cv::Point2f格式的特征点ector
+            for(size_t i=0; i<mCurrentFrame.mvKeysUn.size(); i++)  // 从cv::KeyPoint 格式转为 cv::Point2f 格式
+                mvbPrevMatched[i]=mCurrentFrame.mvKeysUn[i].pt;  // 并存储下来，用于和下一帧进行 match
 
-            if(mpInitializer)
+            if(mpInitializer)                                       // 前面不是已经 if(!mpInitializer) 了吗？      (‧_‧?)    
                 delete mpInitializer;
 
             mpInitializer =  new Initializer(mCurrentFrame,1.0,200);
 
-            fill(mvIniMatches.begin(),mvIniMatches.end(),-1);
+            fill(mvIniMatches.begin(),mvIniMatches.end(),-1);  // fill: 将一个区间的元素都赋予 val 值
 
             return;
         }
     }
-    else
-    {
+    else  // 初始化的准备工作已完成，开始初始化
+    {   
+        // 初始化进两帧，第一帧进来是在上面做的初始化的准备工作，做好之后进第二帧，若这两帧的特征点都>100个，就可以继续。
+        // 否则，重来，将下一帧再作为第一帧 ……
         // Try to initialize
-        if((int)mCurrentFrame.mvKeys.size()<=100)
+        if((int)mCurrentFrame.mvKeys.size()<=100)  // 如果当前帧不到100个特征点，则删除 mpInitializer ，重来
         {
             delete mpInitializer;
             mpInitializer = static_cast<Initializer*>(NULL);
@@ -597,6 +605,7 @@ void Tracking::MonocularInitialization()
 
         // Find correspondences
         ORBmatcher matcher(0.9,true);
+        //  (‧_‧?)    
         int nmatches = matcher.SearchForInitialization(mInitialFrame,mCurrentFrame,mvbPrevMatched,mvIniMatches,100);
 
         // Check if there are enough correspondences
@@ -1501,6 +1510,7 @@ bool Tracking::Relocalization()
 
 }
 
+// 好长阿QAQ
 void Tracking::Reset()
 {
 

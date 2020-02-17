@@ -62,6 +62,7 @@ public:
     cv::Mat GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const double &timestamp);
     cv::Mat GrabImageMonocular(const cv::Mat &im, const double &timestamp);
 
+    // 设置各线程之间 相互指向的指针：eg，Tracking线程中，指向 LocalMapping 的指针
     void SetLocalMapper(LocalMapping* pLocalMapper);
     void SetLoopClosing(LoopClosing* pLoopClosing);
     void SetViewer(Viewer* pViewer);

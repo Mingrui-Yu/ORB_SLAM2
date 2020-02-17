@@ -1,4 +1,4 @@
-/**
+/** 
 * This file is part of ORB-SLAM2.
 *
 * Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
@@ -18,6 +18,7 @@
 * along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
 */
 
+// (‧_‧?) 
 
 #ifndef SYSTEM_H
 #define SYSTEM_H
@@ -25,6 +26,7 @@
 #include<string>
 #include<thread>
 #include<opencv2/core/core.hpp>
+#include <unistd.h>
 
 #include "Tracking.h"
 #include "FrameDrawer.h"
@@ -49,7 +51,7 @@ class LoopClosing;
 class System
 {
 public:
-    // Input sensor
+    // Input sensor 的类型
     enum eSensor{
         MONOCULAR=0,
         STEREO=1,
@@ -100,6 +102,8 @@ public:
     // See format details at: http://vision.in.tum.de/data/datasets/rgbd-dataset
     void SaveTrajectoryTUM(const string &filename);
 
+    //上下两个 SaveTrajectory 有啥区别？ (‧_‧?) 
+
     // Save keyframe poses in the TUM RGB-D dataset format.
     // This method works for all sensor input.
     // Call first Shutdown()
@@ -128,6 +132,7 @@ private:
     eSensor mSensor;
 
     // ORB vocabulary used for place recognition and feature matching.
+    // (ORBVocabulary 是 DBoW2 中的函数的 typedef)
     ORBVocabulary* mpVocabulary;
 
     // KeyFrame database for place recognition (relocalization and loop detection).

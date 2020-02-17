@@ -44,10 +44,12 @@ int main(int argc, char **argv)
     // Retrieve paths to images
     vector<string> vstrImageFilenames;
     vector<double> vTimestamps;
-    string strFile = string(argv[3])+"/rgb.txt";
+    string strFile = string(argv[3])+"/rgb.txt";  // TUM 数据集中的 rgb.txt 文件，存储着所有图像的地址（文件名）+ timestamp
+
+    // 从 rgb.txt 文件中，读取出所有图像的名称和timestamp，分别存储在一个vector之中
     LoadImages(strFile, vstrImageFilenames, vTimestamps);
 
-    int nImages = vstrImageFilenames.size();
+    int nImages = vstrImageFilenames.size();  // 图像的数量
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
     ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::MONOCULAR,true);
@@ -76,13 +78,13 @@ int main(int argc, char **argv)
         }
 
 #ifdef COMPILEDWITHC11
-        std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+        std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();   /// c++11 编译，用这个
 #else
         std::chrono::monotonic_clock::time_point t1 = std::chrono::monotonic_clock::now();
 #endif
 
         // Pass the image to the SLAM system
-        SLAM.TrackMonocular(im,tframe);
+        SLAM.TrackMonocular(im,tframe);  // 所有线程都已工作
 
 #ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
@@ -125,6 +127,7 @@ int main(int argc, char **argv)
     return 0;
 }
 
+// 从 rgb.txt 文件中，读取出所有图像的名称和timestamp，分别存储在一个vector之中
 void LoadImages(const string &strFile, vector<string> &vstrImageFilenames, vector<double> &vTimestamps)
 {
     ifstream f;
@@ -139,10 +142,12 @@ void LoadImages(const string &strFile, vector<string> &vstrImageFilenames, vecto
     while(!f.eof())
     {
         string s;
-        getline(f,s);
+        getline(f,s);   // 读取整行：timestamp + imagename
         if(!s.empty())
         {
-            stringstream ss;
+            stringstream ss;    
+            // 使用 stringstream 类型，是一个流。首先，将读取的整行的字符串 s 传进 ss
+            // 之后传出的时候，将以空格为分隔。同时，可以将原来 string 类型的 timestamp 转换为 double 类型
             ss << s;
             double t;
             string sRGB;

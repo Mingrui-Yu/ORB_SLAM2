@@ -61,13 +61,13 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     //Load ORB Vocabulary
     cout << endl << "Loading ORB Vocabulary. This could take a while..." << endl;
 
-    mpVocabulary = new ORBVocabulary();
-    bool bVocLoad = mpVocabulary->loadFromTextFile(strVocFile);
+    mpVocabulary = new ORBVocabulary();  // 在 System.h 中定义的mpVocabulary
+    bool bVocLoad = mpVocabulary->loadFromTextFile(strVocFile);  // loadFromTextFile
     if(!bVocLoad)
     {
         cerr << "Wrong path to vocabulary. " << endl;
         cerr << "Falied to open at: " << strVocFile << endl;
-        exit(-1);
+        exit(-1);  // exit 为 cpp 的退出函数：退出当前运行的程序，并将参数alue返回给主调进程
     }
     cout << "Vocabulary loaded!" << endl << endl;
 
@@ -85,10 +85,11 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     //(it will live in the main thread of execution, the one that called this constructor)
     mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer,
                              mpMap, mpKeyFrameDatabase, strSettingsFile, mSensor);
+    // Tracking 位于主线程，所以不需要像 LocalMapping 和 LoopClosing 去创建一个 新线程。
 
     //Initialize the Local Mapping thread and launch
     mpLocalMapper = new LocalMapping(mpMap, mSensor==MONOCULAR);
-    mptLocalMapping = new thread(&ORB_SLAM2::LocalMapping::Run,mpLocalMapper);
+    mptLocalMapping = new thread(&ORB_SLAM2::LocalMapping::Run, mpLocalMapper);  // 创建 LocalMapping 线程 (std::thread 用法)
 
     //Initialize the Loop Closing thread and launch
     mpLoopCloser = new LoopClosing(mpMap, mpKeyFrameDatabase, mpVocabulary, mSensor!=MONOCULAR);
@@ -215,6 +216,7 @@ cv::Mat System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const doub
     return Tcw;
 }
 
+// 单目 Tracking 主线程 对单张新入图片进行处理
 cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)
 {
     if(mSensor!=MONOCULAR)
@@ -226,23 +228,25 @@ cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)
     // Check mode change
     {
         unique_lock<mutex> lock(mMutexMode);
+
+        
         if(mbActivateLocalizationMode)
-        {
-            mpLocalMapper->RequestStop();
+        { // 如果是 Localization 模式 （而不是 SLAM 模式）
+            mpLocalMapper->RequestStop();  // 关闭 LocalMapping 线程
 
             // Wait until Local Mapping has effectively stopped
             while(!mpLocalMapper->isStopped())
             {
-                usleep(1000);
+                usleep(1000);  // 以 us 为单位，所有线程都挂起
             }
 
             mpTracker->InformOnlyTracking(true);
             mbActivateLocalizationMode = false;
         }
         if(mbDeactivateLocalizationMode)
-        {
+        { // 如果不是 Localization 模式（即为 SLAM 模式）
             mpTracker->InformOnlyTracking(false);
-            mpLocalMapper->Release();
+            mpLocalMapper->Release();                                               // (‧_‧?) 
             mbDeactivateLocalizationMode = false;
         }
     }
