@@ -260,7 +260,7 @@ cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
         // 为当前帧 创建一个 Frame 对象
         mCurrentFrame = Frame(mImGray,timestamp,mpIniORBextractor,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
     else
-        // 如果已经初始化过了
+        // 如果已经初始化过了，和上面第一次初始化时，ORBextractor不同，上面提取的特征点数 是这里的2倍
         mCurrentFrame = Frame(mImGray,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
 
     Track();
@@ -292,10 +292,10 @@ void Tracking::Track()
         if(mState!=OK)
             return;
     }
-    else
+    else  // 已经初始化过了，要开始正常 Tracking 了
     {
         // System is initialized. Track Frame.
-        bool bOK;
+        bool bOK;  // 用来表示 Tracking OK or Lost
 
         // Initial camera pose estimation using motion model or relocalization (if tracking is lost)
         if(!mbOnlyTracking)
@@ -309,24 +309,30 @@ void Tracking::Track()
                 CheckReplacedInLastFrame();
 
                 if(mVelocity.empty() || mCurrentFrame.mnId<mnLastRelocFrameId+2)
-                {
+                { // 如果运动模型还未建立 or 刚刚进行了重定位
+                  // 与使用上一 KeyFrame的MapPoints进行匹配，以上一帧 的位姿 作为 当前帧 的位姿初值 进行优化
                     bOK = TrackReferenceKeyFrame();
                 }
                 else
-                {
+                {   // 假定匀速运动，相邻两帧 之间的运动 是相同的，从而得到  当前帧 位姿 初值 进行优化
                     bOK = TrackWithMotionModel();
-                    if(!bOK)
+                    if(!bOK) // 如果使用匀速模型 Tracking 失败，则重新使用 Reference KeyFrame 法计算
                         bOK = TrackReferenceKeyFrame();
                 }
             }
             else
             {
+                // Tracking Lost 后，需要重定位
+                // 首先通过BOW进行特征匹配，选出候选关键帧（在ORB-SLAM中所有关键帧都会被记录到BOW数据库中）
+                // 如果匹配数目超过15个则进行EPnP求解，通过5次迭代RNASAC得到相机初始值，然后进行优化相机位姿。
+                // 如果优化后匹配点小于50，则通过投影对之前未匹配的点进行再次计算。
                 bOK = Relocalization();
             }
         }
         else
         {
             // Localization Mode: Local Mapping is deactivated
+            // 同时跟踪与定位，不插入关键帧，局部地图不工作
 
             if(mState==LOST)
             {
@@ -334,7 +340,7 @@ void Tracking::Track()
             }
             else
             {
-                if(!mbVO)
+                if(!mbVO) // 如果不是只跑 VO
                 {
                     // In last frame we tracked enough MapPoints in the map
 
@@ -347,7 +353,7 @@ void Tracking::Track()
                         bOK = TrackReferenceKeyFrame();
                     }
                 }
-                else
+                else  // 如果只跑 VO
                 {
                     // In last frame we tracked mainly "visual odometry" points.
 
@@ -576,14 +582,14 @@ void Tracking::MonocularInitialization()  // 单目 初始化
         {
             mInitialFrame = Frame(mCurrentFrame);
             mLastFrame = Frame(mCurrentFrame);
-            mvbPrevMatched.resize(mCurrentFrame.mvKeysUn.size());  // mvbPrevMatched: cv::Point2f格式的特征点ector
+            mvbPrevMatched.resize(mCurrentFrame.mvKeysUn.size());  // mvbPrevMatched: cv::Point2f格式的特征点vector
             for(size_t i=0; i<mCurrentFrame.mvKeysUn.size(); i++)  // 从cv::KeyPoint 格式转为 cv::Point2f 格式
-                mvbPrevMatched[i]=mCurrentFrame.mvKeysUn[i].pt;  // 并存储下来，用于和下一帧进行 match
+                mvbPrevMatched[i]=mCurrentFrame.mvKeysUn[i].pt;  // 并(当前帧的特征点)存储下来，用于和下一帧进行 match
 
             if(mpInitializer)                                       // 前面不是已经 if(!mpInitializer) 了吗？      (‧_‧?)    
                 delete mpInitializer;
 
-            mpInitializer =  new Initializer(mCurrentFrame,1.0,200);
+            mpInitializer =  new Initializer(mCurrentFrame,1.0,200);  // 创建 Initializer 对象，同时填入 Reference Frame
 
             fill(mvIniMatches.begin(),mvIniMatches.end(),-1);  // fill: 将一个区间的元素都赋予 val 值
 
@@ -595,7 +601,7 @@ void Tracking::MonocularInitialization()  // 单目 初始化
         // 初始化进两帧，第一帧进来是在上面做的初始化的准备工作，做好之后进第二帧，若这两帧的特征点都>100个，就可以继续。
         // 否则，重来，将下一帧再作为第一帧 ……
         // Try to initialize
-        if((int)mCurrentFrame.mvKeys.size()<=100)  // 如果当前帧不到100个特征点，则删除 mpInitializer ，重来
+        if((int)mCurrentFrame.mvKeys.size()<=100)  // 如果当前帧（初始化的第二帧）不到100个特征点，则删除 mpInitializer ，重来
         {
             delete mpInitializer;
             mpInitializer = static_cast<Initializer*>(NULL);
@@ -605,11 +611,11 @@ void Tracking::MonocularInitialization()  // 单目 初始化
 
         // Find correspondences
         ORBmatcher matcher(0.9,true);
-        //  (‧_‧?)    
+        //  当前帧（第二帧）和初始帧之间进行 match 
         int nmatches = matcher.SearchForInitialization(mInitialFrame,mCurrentFrame,mvbPrevMatched,mvIniMatches,100);
 
         // Check if there are enough correspondences
-        if(nmatches<100)
+        if(nmatches<100)  // 如果 match 找到的匹配点对少于100对，则重新初始化
         {
             delete mpInitializer;
             mpInitializer = static_cast<Initializer*>(NULL);
@@ -620,11 +626,13 @@ void Tracking::MonocularInitialization()  // 单目 初始化
         cv::Mat tcw; // Current Camera Translation
         vector<bool> vbTriangulated; // Triangulated Correspondences (mvIniMatches)
 
-        if(mpInitializer->Initialize(mCurrentFrame, mvIniMatches, Rcw, tcw, mvIniP3D, vbTriangulated))
+        if(mpInitializer->Initialize(mCurrentFrame, mvIniMatches, Rcw, tcw, mvIniP3D, vbTriangulated))  // Initialize 对象再填入 Current Frame（第二帧）
+        // 同时就计算 fundamental matrix 和 homography matrix，选择合适的模型，计算出相机的运动
+        // 同时将特征点 triangulate
         {
             for(size_t i=0, iend=mvIniMatches.size(); i<iend;i++)
             {
-                if(mvIniMatches[i]>=0 && !vbTriangulated[i])
+                if(mvIniMatches[i]>=0 && !vbTriangulated[i])  // 如果特征点匹配对没能成功三角化，则不算匹配成功
                 {
                     mvIniMatches[i]=-1;
                     nmatches--;
@@ -632,11 +640,11 @@ void Tracking::MonocularInitialization()  // 单目 初始化
             }
 
             // Set Frame Poses
-            mInitialFrame.SetPose(cv::Mat::eye(4,4,CV_32F));
+            mInitialFrame.SetPose(cv::Mat::eye(4,4,CV_32F));  // 以 Initial Frame 作为空间的坐标原点
             cv::Mat Tcw = cv::Mat::eye(4,4,CV_32F);
             Rcw.copyTo(Tcw.rowRange(0,3).colRange(0,3));
             tcw.copyTo(Tcw.rowRange(0,3).col(3));
-            mCurrentFrame.SetPose(Tcw);
+            mCurrentFrame.SetPose(Tcw);  // 设置 Current Frame 的位姿
 
             CreateInitialMapMonocular();
         }
@@ -646,42 +654,46 @@ void Tracking::MonocularInitialization()  // 单目 初始化
 void Tracking::CreateInitialMapMonocular()
 {
     // Create KeyFrames
+    // 为 Reference Frame 和 Current Frame 创建 KeyFrame object
     KeyFrame* pKFini = new KeyFrame(mInitialFrame,mpMap,mpKeyFrameDB);
     KeyFrame* pKFcur = new KeyFrame(mCurrentFrame,mpMap,mpKeyFrameDB);
 
-
+    // 计算 BoW
     pKFini->ComputeBoW();
     pKFcur->ComputeBoW();
 
-    // Insert KFs in the map
+    // Insert KFs in the map 将关键帧 插入 地图
     mpMap->AddKeyFrame(pKFini);
     mpMap->AddKeyFrame(pKFcur);
 
     // Create MapPoints and asscoiate to keyframes
+    // 创建 MapPoints
     for(size_t i=0; i<mvIniMatches.size();i++)
     {
         if(mvIniMatches[i]<0)
             continue;
 
-        //Create MapPoint.
+        //Create MapPoint. （根据前面计算出的 3D 坐标）
         cv::Mat worldPos(mvIniP3D[i]);
 
         MapPoint* pMP = new MapPoint(worldPos,pKFcur,mpMap);
 
-        pKFini->AddMapPoint(pMP,i);
+        pKFini->AddMapPoint(pMP,i); // i 为 index
         pKFcur->AddMapPoint(pMP,mvIniMatches[i]);
 
+        // 为 MapPoints 添加 观测到它的 KeyFrames
         pMP->AddObservation(pKFini,i);
         pMP->AddObservation(pKFcur,mvIniMatches[i]);
 
-        pMP->ComputeDistinctiveDescriptors();
-        pMP->UpdateNormalAndDepth();
+        pMP->ComputeDistinctiveDescriptors();    // (‧_‧?) 
+        pMP->UpdateNormalAndDepth();                 // (‧_‧?) 
 
-        //Fill Current Frame structure
+        //Fill Current Frame structure （Current Frame 不是 KeyFrame）
         mCurrentFrame.mvpMapPoints[mvIniMatches[i]] = pMP;
         mCurrentFrame.mvbOutlier[mvIniMatches[i]] = false;
 
         //Add to Map
+        // 将该 MapPoints 添加至 Map 中
         mpMap->AddMapPoint(pMP);
     }
 
@@ -707,7 +719,7 @@ void Tracking::CreateInitialMapMonocular()
 
     // Scale initial baseline
     cv::Mat Tc2w = pKFcur->GetPose();
-    Tc2w.col(3).rowRange(0,3) = Tc2w.col(3).rowRange(0,3)*invMedianDepth;
+    Tc2w.col(3).rowRange(0,3) = Tc2w.col(3).rowRange(0,3)*invMedianDepth; // 对初始化的 t 进行尺度归一化
     pKFcur->SetPose(Tc2w);
 
     // Scale points
@@ -721,10 +733,12 @@ void Tracking::CreateInitialMapMonocular()
         }
     }
 
+    // 局部地图 LocalMap
     mpLocalMapper->InsertKeyFrame(pKFini);
     mpLocalMapper->InsertKeyFrame(pKFcur);
 
     mCurrentFrame.SetPose(pKFcur->GetPose());
+    // 将当前KeyFrame 设为 上一帧，以便下一帧运算
     mnLastKeyFrameId=mCurrentFrame.mnId;
     mpLastKeyFrame = pKFcur;
 
@@ -742,7 +756,7 @@ void Tracking::CreateInitialMapMonocular()
 
     mpMap->mvpKeyFrameOrigins.push_back(pKFini);
 
-    mState=OK;
+    mState=OK;  // Tracking State 设置为 OK， 意思是 Tracking 成功
 }
 
 void Tracking::CheckReplacedInLastFrame()
@@ -762,7 +776,9 @@ void Tracking::CheckReplacedInLastFrame()
     }
 }
 
-
+// 在运动模型还未建立或者刚刚进行了重定位的时候，
+// 首先通过BOW进行匹配来加快当前帧和上一关键帧的MapPoints的匹配，通过最小化重投影误差进行优化
+// (把上一帧的位姿设定为当前帧的位姿的初值)
 bool Tracking::TrackReferenceKeyFrame()
 {
     // Compute Bag of Words vector
@@ -779,9 +795,9 @@ bool Tracking::TrackReferenceKeyFrame()
         return false;
 
     mCurrentFrame.mvpMapPoints = vpMapPointMatches;
-    mCurrentFrame.SetPose(mLastFrame.mTcw);
+    mCurrentFrame.SetPose(mLastFrame.mTcw);  // 用上一帧的位姿作为当前帧的位姿初值
 
-    Optimizer::PoseOptimization(&mCurrentFrame);
+    Optimizer::PoseOptimization(&mCurrentFrame); // 优化当前帧的位姿，最小化上一关键帧的MapPoints投影到当前帧的误差
 
     // Discard outliers
     int nmatchesMap = 0;

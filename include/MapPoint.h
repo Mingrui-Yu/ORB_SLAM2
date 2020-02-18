@@ -51,6 +51,7 @@ public:
     std::map<KeyFrame*,size_t> GetObservations();
     int Observations();
 
+    // 为 MapPoints 添加 观测到它的 KeyFrame
     void AddObservation(KeyFrame* pKF,size_t idx);
     void EraseObservation(KeyFrame* pKF);
 

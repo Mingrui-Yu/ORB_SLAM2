@@ -402,14 +402,18 @@ int ORBmatcher::SearchByProjection(KeyFrame* pKF, cv::Mat Scw, const vector<MapP
     return nmatches;
 }
 
+// 两帧之间进行 初始化 匹配
+// F1 初始帧，F2 当前帧
+// vbPrevMatched[i]: F1 特征点 i 预匹配对应的 F2 特征点 (cv::Point2f)
+// vnMatches12[i] = F2_kp_index :  F1的特征点 i 相匹配的特征点在 F2 中的序号为 F2_kp_index
 int ORBmatcher::SearchForInitialization(Frame &F1, Frame &F2, vector<cv::Point2f> &vbPrevMatched, vector<int> &vnMatches12, int windowSize)
 {
     int nmatches=0;
     vnMatches12 = vector<int>(F1.mvKeysUn.size(),-1);
 
-    vector<int> rotHist[HISTO_LENGTH];
+    vector<int> rotHist[HISTO_LENGTH];  // 定义了一个数组，这个数组的每一个元素都是一个 vector<int>
     for(int i=0;i<HISTO_LENGTH;i++)
-        rotHist[i].reserve(500);
+        rotHist[i].reserve(500); // reserve：指定 vector 的最小长度（提前先占好空间），这样能减少 push_back 的开销
     const float factor = 1.0f/HISTO_LENGTH;
 
     vector<int> vMatchedDistance(F2.mvKeysUn.size(),INT_MAX);
@@ -515,6 +519,7 @@ int ORBmatcher::SearchForInitialization(Frame &F1, Frame &F2, vector<cv::Point2f
     for(size_t i1=0, iend1=vnMatches12.size(); i1<iend1; i1++)
         if(vnMatches12[i1]>=0)
             vbPrevMatched[i1]=F2.mvKeysUn[vnMatches12[i1]].pt;
+            // 得到更高精度的 F1 特征点 相匹配的 F2特征点 的坐标（之前预匹配过）
 
     return nmatches;
 }

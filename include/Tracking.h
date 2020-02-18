@@ -58,6 +58,7 @@ public:
              KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor);
 
     // Preprocess the input and call Track(). Extract features and performs stereo matching.
+    // 对输入的图像进行处理（转灰度图），创建 Frame，提取特征，并进行 Track
     cv::Mat GrabImageStereo(const cv::Mat &imRectLeft,const cv::Mat &imRectRight, const double &timestamp);
     cv::Mat GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const double &timestamp);
     cv::Mat GrabImageMonocular(const cv::Mat &im, const double &timestamp);
@@ -149,6 +150,8 @@ protected:
     // points in the map. Still tracking will continue if there are enough matches with temporal points.
     // In that case we are doing visual odometry. The system will try to do relocalization to recover
     // "zero-drift" localization to the map.
+    // 在 Localization 模式中，如果当前帧 与 map 没有匹配点，但与上一帧有匹配点，则只相当于 VO 运行
+    // 同时尝试 Relocalization 来消除漂移
     bool mbVO;
 
     //Other Thread Pointers

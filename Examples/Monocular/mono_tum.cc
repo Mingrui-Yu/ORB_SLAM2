@@ -62,11 +62,11 @@ int main(int argc, char **argv)
     cout << "Start processing sequence ..." << endl;
     cout << "Images in the sequence: " << nImages << endl << endl;
 
-    // Main loop
+    // Main loop 
     cv::Mat im;
     for(int ni=0; ni<nImages; ni++)
     {
-        // Read image from file
+        // Read image from file  读取一帧图像
         im = cv::imread(string(argv[3])+"/"+vstrImageFilenames[ni],CV_LOAD_IMAGE_UNCHANGED);
         double tframe = vTimestamps[ni];
 
