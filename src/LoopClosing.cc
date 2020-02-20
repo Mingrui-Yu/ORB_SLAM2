@@ -54,6 +54,8 @@ void LoopClosing::SetLocalMapper(LocalMapping *pLocalMapper)
 }
 
 
+
+// LoopClosing 线程运行主程序
 void LoopClosing::Run()
 {
     mbFinished =false;
@@ -100,20 +102,23 @@ bool LoopClosing::CheckNewKeyFrames()
     return(!mlpLoopKeyFrameQueue.empty());
 }
 
+
+// 检测 回环 KeyFrame Candidates
 bool LoopClosing::DetectLoop()
 {
     {
         unique_lock<mutex> lock(mMutexLoopQueue);
-        mpCurrentKF = mlpLoopKeyFrameQueue.front();
+        mpCurrentKF = mlpLoopKeyFrameQueue.front();  // 从新 KeyFrame 队列中弹出队首元素
         mlpLoopKeyFrameQueue.pop_front();
         // Avoid that a keyframe can be erased while it is being process by this thread
         mpCurrentKF->SetNotErase();
     }
 
     //If the map contains less than 10 KF or less than 10 KF have passed from last loop detection
+    // 刚进行完回环检测的10帧内的 KeyFrame，不用于回环检测。此时也不进行回环检测
     if(mpCurrentKF->mnId<mLastLoopKFid+10)
     {
-        mpKeyFrameDB->add(mpCurrentKF);
+        mpKeyFrameDB->add(mpCurrentKF);  // 将该 KeyFrame 添加进 KeyFrame Database （Database 用于后续的回环检测，作为候选帧） 
         mpCurrentKF->SetErase();
         return false;
     }
@@ -121,6 +126,7 @@ bool LoopClosing::DetectLoop()
     // Compute reference BoW similarity score
     // This is the lowest score to a connected keyframe in the covisibility graph
     // We will impose loop candidates to have a higher similarity than this
+    // 计算当前 KeyFrame 与其 Covisible KeyFrames 的最低BoW相似分数 s_min
     const vector<KeyFrame*> vpConnectedKeyFrames = mpCurrentKF->GetVectorCovisibleKeyFrames();
     const DBoW2::BowVector &CurrentBowVec = mpCurrentKF->mBowVec;
     float minScore = 1;
@@ -134,13 +140,15 @@ bool LoopClosing::DetectLoop()
         float score = mpORBVocabulary->score(CurrentBowVec, BowVec);
 
         if(score<minScore)
-            minScore = score;
+            minScore = score;  // 得到 s_min
     }
 
     // Query the database imposing the minimum score
+    // 从 KeyFrame Database 中找出当前 KF 的 合适的 KF Candidates
     vector<KeyFrame*> vpCandidateKFs = mpKeyFrameDB->DetectLoopCandidates(mpCurrentKF, minScore);
 
     // If there are no loop candidates, just add new keyframe and return false
+    // 当前处理的帧，未能成功进行回环检测。放弃对该帧处理，从新KF队列中再取出新的 KF 进行处理
     if(vpCandidateKFs.empty())
     {
         mpKeyFrameDB->add(mpCurrentKF);
@@ -153,16 +161,17 @@ bool LoopClosing::DetectLoop()
     // Each candidate expands a covisibility group (keyframes connected to the loop candidate in the covisibility graph)
     // A group is consistent with a previous group if they share at least a keyframe
     // We must detect a consistent loop in several consecutive keyframes to accept it
+    // 进行连续性检测
     mvpEnoughConsistentCandidates.clear();
 
     vector<ConsistentGroup> vCurrentConsistentGroups;
-    vector<bool> vbConsistentGroup(mvConsistentGroups.size(),false);
+    vector<bool> vbConsistentGroup(mvConsistentGroups.size(),false);  // 设置 vbConsistentGroup, 对于所有 vpCandidateKFs ，只设置一次
     for(size_t i=0, iend=vpCandidateKFs.size(); i<iend; i++)
     {
         KeyFrame* pCandidateKF = vpCandidateKFs[i];
 
-        set<KeyFrame*> spCandidateGroup = pCandidateKF->GetConnectedKeyFrames();
-        spCandidateGroup.insert(pCandidateKF);
+        set<KeyFrame*> spCandidateGroup = pCandidateKF->GetConnectedKeyFrames(); // Covisibility KFs
+        spCandidateGroup.insert(pCandidateKF);  // spCandidateGroup 中存储的是 CandidateKF 及其 Covisibility KFs 组成的 Group
 
         bool bEnoughConsistent = false;
         bool bConsistentForSomeGroup = false;
@@ -173,7 +182,7 @@ bool LoopClosing::DetectLoop()
             bool bConsistent = false;
             for(set<KeyFrame*>::iterator sit=spCandidateGroup.begin(), send=spCandidateGroup.end(); sit!=send;sit++)
             {
-                if(sPreviousGroup.count(*sit))
+                if(sPreviousGroup.count(*sit)) // if (spCandidateGroup 中的该 KF 存在于 mvConsistentGroups 中的该 Group)
                 {
                     bConsistent=true;
                     bConsistentForSomeGroup=true;
@@ -181,11 +190,11 @@ bool LoopClosing::DetectLoop()
                 }
             }
 
-            if(bConsistent)
+            if(bConsistent)  // 如果 spCandidateGroup 中的 某 KF 存在于 mvConsistentGroups 的该 Group 中
             {
-                int nPreviousConsistency = mvConsistentGroups[iG].second;
-                int nCurrentConsistency = nPreviousConsistency + 1;
-                if(!vbConsistentGroup[iG])
+                int nPreviousConsistency = mvConsistentGroups[iG].second; 
+                int nCurrentConsistency = nPreviousConsistency + 1;  // 该 Group 的连续数目 + 1
+                if(!vbConsistentGroup[iG])  // if (该 Group 没有与之前的 Candidate KFs 的 spCandidateGroup 匹配过)
                 {
                     ConsistentGroup cg = make_pair(spCandidateGroup,nCurrentConsistency);
                     vCurrentConsistentGroups.push_back(cg);
@@ -193,7 +202,7 @@ bool LoopClosing::DetectLoop()
                 }
                 if(nCurrentConsistency>=mnCovisibilityConsistencyTh && !bEnoughConsistent)
                 {
-                    mvpEnoughConsistentCandidates.push_back(pCandidateKF);
+                    mvpEnoughConsistentCandidates.push_back(pCandidateKF);  // 该 Candidate KF 满足要求，可用于下一步处理
                     bEnoughConsistent=true; //this avoid to insert the same candidate more than once
                 }
             }

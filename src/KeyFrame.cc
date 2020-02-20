@@ -143,10 +143,10 @@ void KeyFrame::UpdateBestCovisibles()
     for(map<KeyFrame*,int>::iterator mit=mConnectedKeyFrameWeights.begin(), mend=mConnectedKeyFrameWeights.end(); mit!=mend; mit++)
        vPairs.push_back(make_pair(mit->second,mit->first));
 
-    sort(vPairs.begin(),vPairs.end());
+    sort(vPairs.begin(),vPairs.end());  // 根据 Covisibibility KeyFrame 边的权重大小 （也就是 共同观测到的 MapPoints 的数目）排序
     list<KeyFrame*> lKFs;
     list<int> lWs;
-    for(size_t i=0, iend=vPairs.size(); i<iend;i++)
+    for(size_t i=0, iend=vPairs.size(); i<iend;i++)         // 排序后存入 vector 中
     {
         lKFs.push_front(vPairs[i].second);
         lWs.push_front(vPairs[i].first);

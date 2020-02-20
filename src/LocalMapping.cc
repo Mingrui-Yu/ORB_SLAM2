@@ -44,6 +44,8 @@ void LocalMapping::SetTracker(Tracking *pTracker)
     mpTracker=pTracker;
 }
 
+
+// LocalMapping 线程的入口
 void LocalMapping::Run()
 {
 
@@ -55,35 +57,42 @@ void LocalMapping::Run()
         SetAcceptKeyFrames(false);
 
         // Check if there are keyframes in the queue
-        if(CheckNewKeyFrames())
+        if(CheckNewKeyFrames())  // 检查队列中是否有新插入的关键帧
         {
             // BoW conversion and insertion in Map
+            // 更新 MapPoints 与 KeyFrame 的关联 + UpdateConnections()
             ProcessNewKeyFrame();
 
             // Check recent MapPoints
+            // 剔除地图中质量不好的 MapPoints
             MapPointCulling();
 
             // Triangulate new MapPoints
+            // 通过三角化，在 Map 中生成一些性的 MapPoints
             CreateNewMapPoints();
 
             if(!CheckNewKeyFrames())
             {
                 // Find more matches in neighbor keyframes and fuse point duplications
+                // 检查当前关键帧与相邻帧重复的 MapPoints，并进行融合
                 SearchInNeighbors();
             }
 
             mbAbortBA = false;
 
-            if(!CheckNewKeyFrames() && !stopRequested())
+            if(!CheckNewKeyFrames() && !stopRequested())  
+            // 如果队列中已经没有新的关键帧了（意思是所有新的关键帧都已经经过上述处理了）
+            // 则进行 Local BA
             {
                 // Local BA
-                if(mpMap->KeyFramesInMap()>2)
+                if(mpMap->KeyFramesInMap()>2)  // 地图里的关键帧不能太少，也就是刚开始运行系统，不进行 Local BA
                     Optimizer::LocalBundleAdjustment(mpCurrentKeyFrame,&mbAbortBA, mpMap);
 
                 // Check redundant local Keyframes
+                // 剔除冗余的关键帧（其90%以上的 MapPoints 能被其他共视关键帧观测到）
                 KeyFrameCulling();
             }
-
+            // 剩下的关键帧都是很必要且质量高的关键帧，将这些关键帧送入 LoopClosing 线程
             mpLoopCloser->InsertKeyFrame(mpCurrentKeyFrame);
         }
         else if(Stop())
@@ -122,15 +131,16 @@ void LocalMapping::InsertKeyFrame(KeyFrame *pKF)
 bool LocalMapping::CheckNewKeyFrames()
 {
     unique_lock<mutex> lock(mMutexNewKFs);
-    return(!mlNewKeyFrames.empty());
+    return(!mlNewKeyFrames.empty());  // 返回新关键帧队列是否为空
 }
 
+// 对新送入的关键帧 进行处理
 void LocalMapping::ProcessNewKeyFrame()
 {
     {
         unique_lock<mutex> lock(mMutexNewKFs);
         mpCurrentKeyFrame = mlNewKeyFrames.front();
-        mlNewKeyFrames.pop_front();
+        mlNewKeyFrames.pop_front();  // 新关键帧队列 弹出队首元素
     }
 
     // Compute Bags of Words structures
@@ -183,21 +193,21 @@ void LocalMapping::MapPointCulling()
     while(lit!=mlpRecentAddedMapPoints.end())
     {
         MapPoint* pMP = *lit;
-        if(pMP->isBad())
+        if(pMP->isBad())  // 如果这个 MapPoints 本身的质量就不好
         {
             lit = mlpRecentAddedMapPoints.erase(lit);
         }
-        else if(pMP->GetFoundRatio()<0.25f )
-        {
-            pMP->SetBadFlag();
-            lit = mlpRecentAddedMapPoints.erase(lit);
-        }
-        else if(((int)nCurrentKFid-(int)pMP->mnFirstKFid)>=2 && pMP->Observations()<=cnThObs)
+        else if(pMP->GetFoundRatio()<0.25f )  // 如果 实际观测到这个MapPoints 的 KF 数目 / 理论上能观察这个 MapPoints 的 KF 的数量 < 25%
         {
             pMP->SetBadFlag();
             lit = mlpRecentAddedMapPoints.erase(lit);
         }
-        else if(((int)nCurrentKFid-(int)pMP->mnFirstKFid)>=3)
+        else if(((int)nCurrentKFid-(int)pMP->mnFirstKFid)>=2 && pMP->Observations()<=cnThObs) 
+        { // 如果观测到该 MapPoints 的 KF 太少 （不包含首次观测到 MapPoints 附近的情况）
+            pMP->SetBadFlag();
+            lit = mlpRecentAddedMapPoints.erase(lit);
+        }
+        else if(((int)nCurrentKFid-(int)pMP->mnFirstKFid)>=3)     // (‧_‧?) 
             lit = mlpRecentAddedMapPoints.erase(lit);
         else
             lit++;
@@ -480,6 +490,7 @@ void LocalMapping::SearchInNeighbors()
 
 
     // Search matches by projection from current KF in target KFs
+    // 将当前帧的 MapPointMatches 与 相邻 KFs 融合
     ORBmatcher matcher;
     vector<MapPoint*> vpMapPointMatches = mpCurrentKeyFrame->GetMapPointMatches();
     for(vector<KeyFrame*>::iterator vit=vpTargetKFs.begin(), vend=vpTargetKFs.end(); vit!=vend; vit++)
@@ -511,7 +522,7 @@ void LocalMapping::SearchInNeighbors()
         }
     }
 
-    matcher.Fuse(mpCurrentKeyFrame,vpFuseCandidates);
+    matcher.Fuse(mpCurrentKeyFrame,vpFuseCandidates);  // 将所有相邻 KF 的有效 MapPointsMatches 与 当前KF 融合
 
 
     // Update points

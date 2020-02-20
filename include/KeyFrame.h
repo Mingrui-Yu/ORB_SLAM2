@@ -208,9 +208,12 @@ protected:
 
     // Grid over the image to speed up feature matching
     std::vector< std::vector <std::vector<size_t> > > mGrid;
-
+    
+    // 这里存的 KFs 就是和该 KF 在 Convisiblity Graph 中相连的 KFs
     std::map<KeyFrame*,int> mConnectedKeyFrameWeights;
+    // 上面 map 中的 KFs 根据权重大小排序后的 vector
     std::vector<KeyFrame*> mvpOrderedConnectedKeyFrames;
+    // 上面 map 中的 KFs 的权重 根据权重大小排序后的 vector
     std::vector<int> mvOrderedWeights;
 
     // Spanning Tree and Loop Edges
