@@ -108,7 +108,6 @@ void LocalMapping::Run()
 
         ResetIfRequested();
 
-        // Tracking will see that Local Mapping is busy
         SetAcceptKeyFrames(true);
 
         if(CheckFinish())

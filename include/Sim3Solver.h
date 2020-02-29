@@ -113,6 +113,7 @@ protected:
     double mRansacProb;
 
     // RANSAC min inliers
+    // RANSAC 每次所需的最少 inliers 数目
     int mRansacMinInliers;
 
     // RANSAC max iterations

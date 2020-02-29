@@ -241,7 +241,8 @@ bool LoopClosing::ComputeSim3()
 {
     // For each consistent loop candidate we try to compute a Sim3
 
-    const int nInitialCandidates = mvpEnoughConsistentCandidates.size();
+    // mvpEnoughConsistentCandidates 是 之前 DetectLoop() 检测出的满足连续性要求的 Candidate KFs
+    const int nInitialCandidates = mvpEnoughConsistentCandidates.size();  
 
     // We compute first ORB matches for each candidate
     // If enough matches are found, we setup a Sim3Solver
@@ -258,7 +259,7 @@ bool LoopClosing::ComputeSim3()
 
     int nCandidates=0; //candidates with enough matches
 
-    for(int i=0; i<nInitialCandidates; i++)
+    for(int i=0; i<nInitialCandidates; i++)  // 遍历所有的 Candidate KFs
     {
         KeyFrame* pKF = mvpEnoughConsistentCandidates[i];
 
@@ -271,6 +272,7 @@ bool LoopClosing::ComputeSim3()
             continue;
         }
 
+        // 通过 BoW 搜索出 当前 KF 和该 Candidate KF 之间的 MapPoint matches
         int nmatches = matcher.SearchByBoW(mpCurrentKF,pKF,vvpMapPointMatches[i]);
 
         if(nmatches<20)
@@ -278,10 +280,11 @@ bool LoopClosing::ComputeSim3()
             vbDiscarded[i] = true;
             continue;
         }
-        else
+        else // 设置 Sim3 求解器，并设置参数
         {
             Sim3Solver* pSolver = new Sim3Solver(mpCurrentKF,pKF,vvpMapPointMatches[i],mbFixScale);
-            pSolver->SetRansacParameters(0.99,20,300);
+            pSolver->SetRansacParameters(0.99,20,300);  
+            // 设置对于每个 Candidate KF 的 Sim3 RANSAC 求解最大迭代次数为300，最小 inliers 数目为20
             vpSim3Solvers[i] = pSolver;
         }
 
@@ -292,6 +295,7 @@ bool LoopClosing::ComputeSim3()
 
     // Perform alternatively RANSAC iterations for each candidate
     // until one is succesful or all fail
+    // 进行 RANSAC 迭代求解
     while(nCandidates>0 && !bMatch)
     {
         for(int i=0; i<nInitialCandidates; i++)
@@ -302,14 +306,16 @@ bool LoopClosing::ComputeSim3()
             KeyFrame* pKF = mvpEnoughConsistentCandidates[i];
 
             // Perform 5 Ransac Iterations
+            // 最然对于一个 Candidate KF 总共要迭代 300 次，但每次都只迭代5次
             vector<bool> vbInliers;
             int nInliers;
             bool bNoMore;
 
             Sim3Solver* pSolver = vpSim3Solvers[i];
-            cv::Mat Scm  = pSolver->iterate(5,bNoMore,vbInliers,nInliers);
+            cv::Mat Scm  = pSolver->iterate(5,bNoMore,vbInliers,nInliers);  // 迭代5次
 
             // If Ransac reachs max. iterations discard keyframe
+            // 对于 该 Candidate KF 的 RANSAC 总迭代次数达到最大值（不仅是本次 iterate()）；也可能是算不了，直接放弃了
             if(bNoMore)
             {
                 vbDiscarded[i]=true;
@@ -317,7 +323,7 @@ bool LoopClosing::ComputeSim3()
             }
 
             // If RANSAC returns a Sim3, perform a guided matching and optimize with all correspondences
-            if(!Scm.empty())
+            if(!Scm.empty())  // 计算得到了一个 Sim3 初值
             {
                 vector<MapPoint*> vpMapPointMatches(vvpMapPointMatches[i].size(), static_cast<MapPoint*>(NULL));
                 for(size_t j=0, jend=vbInliers.size(); j<jend; j++)
@@ -329,7 +335,7 @@ bool LoopClosing::ComputeSim3()
                 cv::Mat R = pSolver->GetEstimatedRotation();
                 cv::Mat t = pSolver->GetEstimatedTranslation();
                 const float s = pSolver->GetEstimatedScale();
-                matcher.SearchBySim3(mpCurrentKF,pKF,vpMapPointMatches,s,R,t,7.5);
+                matcher.SearchBySim3(mpCurrentKF,pKF,vpMapPointMatches,s,R,t,7.5);  // 通过 SearchBySim3 得到更多 匹配
 
                 g2o::Sim3 gScm(Converter::toMatrix3d(R),Converter::toVector3d(t),s);
                 const int nInliers = Optimizer::OptimizeSim3(mpCurrentKF, pKF, vpMapPointMatches, gScm, 10, mbFixScale);
@@ -338,49 +344,50 @@ bool LoopClosing::ComputeSim3()
                 if(nInliers>=20)
                 {
                     bMatch = true;
-                    mpMatchedKF = pKF;
+                    mpMatchedKF = pKF;  // 满足所有要求的 CandidateKF，可作为回环 KF
                     g2o::Sim3 gSmw(Converter::toMatrix3d(pKF->GetRotation()),Converter::toVector3d(pKF->GetTranslation()),1.0);
                     mg2oScw = gScm*gSmw;
-                    mScw = Converter::toCvMat(mg2oScw);
+                    mScw = Converter::toCvMat(mg2oScw);  // Current KF 闭环后的 Sim3
 
-                    mvpCurrentMatchedPoints = vpMapPointMatches;
+                    mvpCurrentMatchedPoints = vpMapPointMatches;  // CurrentKF 与 （回环 KF 的 MapPoints） 的匹配
                     break;
                 }
             }
         }
     }
 
-    if(!bMatch)
+    if(!bMatch)  // if (上一步没有找到匹配当前 KF 的 合适 Candidate KF)
     {
         for(int i=0; i<nInitialCandidates; i++)
-             mvpEnoughConsistentCandidates[i]->SetErase();
+             mvpEnoughConsistentCandidates[i]->SetErase(); // 放弃当前 KF，清除相关变量
         mpCurrentKF->SetErase();
         return false;
     }
 
     // Retrieve MapPoints seen in Loop Keyframe and neighbors
+    // 从回环帧和其相邻帧中 提取 MapPoints
     vector<KeyFrame*> vpLoopConnectedKFs = mpMatchedKF->GetVectorCovisibleKeyFrames();
     vpLoopConnectedKFs.push_back(mpMatchedKF);
     mvpLoopMapPoints.clear();
     for(vector<KeyFrame*>::iterator vit=vpLoopConnectedKFs.begin(); vit!=vpLoopConnectedKFs.end(); vit++)
-    {
+    {  // 遍历 mpMatched KF 的所有 Covisible KFs
         KeyFrame* pKF = *vit;
         vector<MapPoint*> vpMapPoints = pKF->GetMapPointMatches();
         for(size_t i=0, iend=vpMapPoints.size(); i<iend; i++)
-        {
+        {  // 遍历 Covisible KF 含有的所有 MapPoints
             MapPoint* pMP = vpMapPoints[i];
             if(pMP)
             {
                 if(!pMP->isBad() && pMP->mnLoopPointForKF!=mpCurrentKF->mnId)
                 {
-                    mvpLoopMapPoints.push_back(pMP);
+                    mvpLoopMapPoints.push_back(pMP);  // 提取的 MapPoints
                     pMP->mnLoopPointForKF=mpCurrentKF->mnId;
                 }
             }
         }
     }
 
-    // Find more matches projecting with the computed Sim3
+    // Find more matches projecting with the computed Sim3                   // (‧_‧?) 
     matcher.SearchByProjection(mpCurrentKF, mScw, mvpLoopMapPoints, mvpCurrentMatchedPoints,10);
 
     // If enough matches accept Loop
@@ -391,7 +398,7 @@ bool LoopClosing::ComputeSim3()
             nTotalMatches++;
     }
 
-    if(nTotalMatches>=40)
+    if(nTotalMatches>=40)  // 如果有足够多的匹配点，接受该回环，回环检测成功
     {
         for(int i=0; i<nInitialCandidates; i++)
             if(mvpEnoughConsistentCandidates[i]!=mpMatchedKF)
@@ -408,6 +415,8 @@ bool LoopClosing::ComputeSim3()
 
 }
 
+
+// 回环检测成功后，进行回环校正
 void LoopClosing::CorrectLoop()
 {
     cout << "Loop detected!" << endl;
@@ -417,6 +426,7 @@ void LoopClosing::CorrectLoop()
     mpLocalMapper->RequestStop();
 
     // If a Global Bundle Adjustment is running, abort it
+    // 放弃正在运行 Global BA （若有）
     if(isRunningGBA())
     {
         unique_lock<mutex> lock(mMutexGBA);
@@ -432,7 +442,7 @@ void LoopClosing::CorrectLoop()
     }
 
     // Wait until Local Mapping has effectively stopped
-    while(!mpLocalMapper->isStopped())
+    while(!mpLocalMapper->isStopped())                   //    isStopped 具体指什么 (‧_‧?) 
     {
         usleep(1000);
     }
@@ -441,6 +451,7 @@ void LoopClosing::CorrectLoop()
     mpCurrentKF->UpdateConnections();
 
     // Retrive keyframes connected to the current keyframe and compute corrected Sim3 pose by propagation
+    // 先提取 当前 KF 及其 Covisible KFs
     mvpCurrentConnectedKFs = mpCurrentKF->GetVectorCovisibleKeyFrames();
     mvpCurrentConnectedKFs.push_back(mpCurrentKF);
 
@@ -454,14 +465,16 @@ void LoopClosing::CorrectLoop()
         unique_lock<mutex> lock(mpMap->mMutexMapUpdate);
 
         for(vector<KeyFrame*>::iterator vit=mvpCurrentConnectedKFs.begin(), vend=mvpCurrentConnectedKFs.end(); vit!=vend; vit++)
-        {
+        {  // 遍历当前 KF 及其 Covisible KFs
             KeyFrame* pKFi = *vit;
 
             cv::Mat Tiw = pKFi->GetPose();
 
+            // 计算该 KF 闭环后的 Sim3
+            // 该 KF 闭环后的 Sim3 = 该 KF 与 Current KF 之间的相对位姿 * Current KF 闭环后的 Sim3
             if(pKFi!=mpCurrentKF)
             {
-                cv::Mat Tic = Tiw*Twc;
+                cv::Mat Tic = Tiw*Twc;  //得到该帧 与 当前 KF 的相对位姿
                 cv::Mat Ric = Tic.rowRange(0,3).colRange(0,3);
                 cv::Mat tic = Tic.rowRange(0,3).col(3);
                 g2o::Sim3 g2oSic(Converter::toMatrix3d(Ric),Converter::toVector3d(tic),1.0);
@@ -470,6 +483,7 @@ void LoopClosing::CorrectLoop()
                 CorrectedSim3[pKFi]=g2oCorrectedSiw;
             }
 
+            // 再存储一下该 KF 未闭环时的 Sim3
             cv::Mat Riw = Tiw.rowRange(0,3).colRange(0,3);
             cv::Mat tiw = Tiw.rowRange(0,3).col(3);
             g2o::Sim3 g2oSiw(Converter::toMatrix3d(Riw),Converter::toVector3d(tiw),1.0);
@@ -478,23 +492,24 @@ void LoopClosing::CorrectLoop()
         }
 
         // Correct all MapPoints obsrved by current keyframe and neighbors, so that they align with the other side of the loop
+        // 对上述所有 KFs 所有的 MapPoints 的坐标进行调整
         for(KeyFrameAndPose::iterator mit=CorrectedSim3.begin(), mend=CorrectedSim3.end(); mit!=mend; mit++)
-        {
+        {  // 遍历上述所有 pair (Covisible KF 和其 Sim3)
             KeyFrame* pKFi = mit->first;
             g2o::Sim3 g2oCorrectedSiw = mit->second;
             g2o::Sim3 g2oCorrectedSwi = g2oCorrectedSiw.inverse();
 
             g2o::Sim3 g2oSiw =NonCorrectedSim3[pKFi];
 
-            vector<MapPoint*> vpMPsi = pKFi->GetMapPointMatches();
-            for(size_t iMP=0, endMPi = vpMPsi.size(); iMP<endMPi; iMP++)
-            {
+            vector<MapPoint*> vpMPsi = pKFi->GetMapPointMatches();  // 取出该 KF 的所有 MapPoints
+            for(size_t iMP=0, endMPi = vpMPsi.size(); iMP<endMPi; iMP++)  
+            {  // 遍历这些 MapPoints
                 MapPoint* pMPi = vpMPsi[iMP];
                 if(!pMPi)
                     continue;
                 if(pMPi->isBad())
                     continue;
-                if(pMPi->mnCorrectedByKF==mpCurrentKF->mnId)
+                if(pMPi->mnCorrectedByKF==mpCurrentKF->mnId)  // 如果该 MapPoint 已经被当前 KF 校正过了
                     continue;
 
                 // Project with non-corrected pose and project back with corrected pose
@@ -510,6 +525,7 @@ void LoopClosing::CorrectLoop()
             }
 
             // Update keyframe pose with corrected Sim3. First transform Sim3 to SE3 (scale translation)
+            // 对该 Covisible KF 的位姿进行调整
             Eigen::Matrix3d eigR = g2oCorrectedSiw.rotation().toRotationMatrix();
             Eigen::Vector3d eigt = g2oCorrectedSiw.translation();
             double s = g2oCorrectedSiw.scale();
@@ -527,13 +543,13 @@ void LoopClosing::CorrectLoop()
         // Start Loop Fusion
         // Update matched map points and replace if duplicated
         for(size_t i=0; i<mvpCurrentMatchedPoints.size(); i++)
-        {
+        { // for( Current KF 的 KeyPoints 与 回环 KF 的 MapPoints 的 matches)
             if(mvpCurrentMatchedPoints[i])
             {
                 MapPoint* pLoopMP = mvpCurrentMatchedPoints[i];
                 MapPoint* pCurMP = mpCurrentKF->GetMapPoint(i);
-                if(pCurMP)
-                    pCurMP->Replace(pLoopMP);
+                if(pCurMP)  // if (该 KeyPoint 本身对应了 MapPoint)
+                    pCurMP->Replace(pLoopMP);  // 用回环 KF 的 MapPoints 替换 该 KeyPoint 本身的MapPoint
                 else
                 {
                     mpCurrentKF->AddMapPoint(pLoopMP,i);
@@ -548,14 +564,16 @@ void LoopClosing::CorrectLoop()
     // Project MapPoints observed in the neighborhood of the loop keyframe
     // into the current keyframe and neighbors using corrected poses.
     // Fuse duplications.
+    // 用 Loop KF 及其 Convisible KFs 的 MapPoints 融合（替换）Current KF 及其 Convisible KFs 的 MapPoints
     SearchAndFuse(CorrectedSim3);
 
 
+    // (‧_‧?)  这段更新关系每太看懂
     // After the MapPoint fusion, new links in the covisibility graph will appear attaching both sides of the loop
     map<KeyFrame*, set<KeyFrame*> > LoopConnections;
 
     for(vector<KeyFrame*>::iterator vit=mvpCurrentConnectedKFs.begin(), vend=mvpCurrentConnectedKFs.end(); vit!=vend; vit++)
-    {
+    { // 遍历 Current KF 及其 Covisible KFs 
         KeyFrame* pKFi = *vit;
         vector<KeyFrame*> vpPreviousNeighbors = pKFi->GetVectorCovisibleKeyFrames();
 
@@ -573,6 +591,7 @@ void LoopClosing::CorrectLoop()
     }
 
     // Optimize graph
+    // 优化 Essential Graph
     Optimizer::OptimizeEssentialGraph(mpMap, mpMatchedKF, mpCurrentKF, NonCorrectedSim3, CorrectedSim3, LoopConnections, mbFixScale);
 
     mpMap->InformNewBigChange();
@@ -582,6 +601,7 @@ void LoopClosing::CorrectLoop()
     mpCurrentKF->AddLoopEdge(mpMatchedKF);
 
     // Launch a new thread to perform Global Bundle Adjustment
+    // 创建 Global BA 线程，并进行 Global  BA
     mbRunningGBA = true;
     mbFinishedGBA = false;
     mbStopGBA = false;

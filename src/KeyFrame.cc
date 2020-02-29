@@ -422,10 +422,11 @@ void KeyFrame::AddLoopEdge(KeyFrame *pKF)
     mspLoopEdges.insert(pKF);
 }
 
+// 添加回环边
 set<KeyFrame*> KeyFrame::GetLoopEdges()
 {
     unique_lock<mutex> lockCon(mMutexConnections);
-    return mspLoopEdges;
+    return mspLoopEdges; // KeyFrame 对象的一个元素，存储着与 Current KF 匹配上的 Loop KFs
 }
 
 void KeyFrame::SetNotErase()

@@ -114,9 +114,10 @@ Sim3Solver::Sim3Solver(KeyFrame *pKF1, KeyFrame *pKF2, const vector<MapPoint *> 
 void Sim3Solver::SetRansacParameters(double probability, int minInliers, int maxIterations)
 {
     mRansacProb = probability;
-    mRansacMinInliers = minInliers;
+    mRansacMinInliers = minInliers;  // 设置 RANSAC 每次所需的最少 inliers 数目
     mRansacMaxIts = maxIterations;    
 
+    // Mappoints匹配对 的数目
     N = mvpMapPoints1.size(); // number of correspondences
 
     mvbInliersi.resize(N);
@@ -138,12 +139,12 @@ void Sim3Solver::SetRansacParameters(double probability, int minInliers, int max
 }
 
 cv::Mat Sim3Solver::iterate(int nIterations, bool &bNoMore, vector<bool> &vbInliers, int &nInliers)
-{
+{  // 每次进来都要迭代 nlterations 次
     bNoMore = false;
     vbInliers = vector<bool>(mN1,false);
     nInliers=0;
 
-    if(N<mRansacMinInliers)
+    if(N<mRansacMinInliers)  // 如果 匹配对总数就直接小于 RANSAC 每次所需的最少 inliers 数目，就不用算了
     {
         bNoMore = true;
         return cv::Mat();
@@ -155,7 +156,7 @@ cv::Mat Sim3Solver::iterate(int nIterations, bool &bNoMore, vector<bool> &vbInli
     cv::Mat P3Dc2i(3,3,CV_32F);
 
     int nCurrentIterations = 0;
-    while(mnIterations<mRansacMaxIts && nCurrentIterations<nIterations)
+    while(mnIterations<mRansacMaxIts && nCurrentIterations<nIterations)  // 本次迭代次数达到上限 或者 总共迭代次数达到上限
     {
         nCurrentIterations++;
         mnIterations++;
@@ -200,7 +201,7 @@ cv::Mat Sim3Solver::iterate(int nIterations, bool &bNoMore, vector<bool> &vbInli
         }
     }
 
-    if(mnIterations>=mRansacMaxIts)
+    if(mnIterations>=mRansacMaxIts)  // 迭代总次数（不只是本次 iterate 的次数）达到最大值
         bNoMore=true;
 
     return cv::Mat();

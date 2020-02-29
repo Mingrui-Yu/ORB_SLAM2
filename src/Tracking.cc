@@ -412,7 +412,7 @@ void Tracking::Track()
         // 得到相机的估计位姿初值后，进入局部地图追踪
         if(!mbOnlyTracking) // SLAM 模式
         {
-            if(bOK) // 如果上一帧 Tracking OK
+            if(bOK) // 如果 第一步 Tracking 初值 OK
                 bOK = TrackLocalMap();  // 提取 local map 并且 找到与当前帧的 ORB 特征相匹配的 local map 中的点
         }
         else  // Localization 模式
@@ -420,7 +420,7 @@ void Tracking::Track()
             // mbVO true means that there are few matches to MapPoints in the map. We cannot retrieve
             // a local map and therefore we do not perform TrackLocalMap(). Once the system relocalizes
             // the camera we will use the local map again.
-            if(bOK && !mbVO) // 如果上一帧 Tracking OK 并且 不是VO 模式 （VO 模式 没有局部地图）
+            if(bOK && !mbVO) // 如果 第一步 Tracking 初值 OK 并且 不是VO 模式 （VO 模式 没有局部地图）
                 bOK = TrackLocalMap();
         }
 
@@ -668,6 +668,7 @@ void Tracking::CreateInitialMapMonocular()
     // 为 Reference Frame 和 Current Frame 创建 KeyFrame object
     KeyFrame* pKFini = new KeyFrame(mInitialFrame,mpMap,mpKeyFrameDB);
     KeyFrame* pKFcur = new KeyFrame(mCurrentFrame,mpMap,mpKeyFrameDB);
+
 
     // 计算 BoW
     pKFini->ComputeBoW();

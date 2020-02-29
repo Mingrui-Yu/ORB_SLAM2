@@ -45,9 +45,12 @@ int main(int argc, char **argv)
     // Retrieve paths to images
     vector<string> vstrImageFilenames;
     vector<double> vTimestamps;
+
+    string sequenceDir = string(argv[3]);
     LoadImages(string(argv[3]), vstrImageFilenames, vTimestamps);
 
-    int nImages = vstrImageFilenames.size();
+    // cv::FileStorage fSettings(string(argv[2]), cv::FileStorage::READ);
+    int nImages =  vstrImageFilenames.size();
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
     ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::MONOCULAR,true);
@@ -119,7 +122,8 @@ int main(int argc, char **argv)
     cout << "mean tracking time: " << totaltime/nImages << endl;
 
     // Save camera trajectory
-    SLAM.SaveKeyFrameTrajectoryTUM("KeyFrameTrajectory.txt");    
+    // SLAM.SaveKeyFrameTrajectoryTUM("KeyFrameTrajectory.txt");    
+    SLAM.SaveKeyFrameTrajectoryAndLoopEdge(sequenceDir + "/KeyFrameTrajectory.txt", sequenceDir + "/LoopEdges.txt");
 
     return 0;
 }
@@ -143,7 +147,7 @@ void LoadImages(const string &strPathToSequence, vector<string> &vstrImageFilena
         }
     }
 
-    string strPrefixLeft = strPathToSequence + "/image_0/";
+    string strPrefixLeft = strPathToSequence + "/image_2/";  // 使用 rgb 图
 
     const int nTimes = vTimestamps.size();
     vstrImageFilenames.resize(nTimes);

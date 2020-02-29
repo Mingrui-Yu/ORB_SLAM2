@@ -121,7 +121,7 @@ public:
 public:
 
     static long unsigned int nNextId;
-    long unsigned int mnId;
+    long unsigned int mnId;  // KF 的 KF id 号
     const long unsigned int mnFrameId;
 
     const double mTimeStamp;

@@ -110,6 +110,9 @@ public:
     // See format details at: http://vision.in.tum.de/data/datasets/rgbd-dataset
     void SaveKeyFrameTrajectoryTUM(const string &filename);
 
+    // 存储 KeyFrame Trajectory 以及 loop edges
+    void SaveKeyFrameTrajectoryAndLoopEdge(const string &KF_filename, const string &loop_filename);
+
     // Save camera trajectory in the KITTI dataset format.
     // Only for stereo and RGB-D. This method does not work for monocular.
     // Call first Shutdown()

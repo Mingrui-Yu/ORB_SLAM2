@@ -385,6 +385,44 @@ void System::SaveTrajectoryTUM(const string &filename)
     cout << endl << "trajectory saved!" << endl;
 }
 
+void System::SaveKeyFrameTrajectoryAndLoopEdge(const string &KF_filename, const string &loop_filename){
+    cout << endl << "Saving keyframe trajectory to " << KF_filename << " ..." << endl;
+    cout << endl << "Saving loop edges to " << loop_filename << " ..." << endl;
+    vector<KeyFrame*> vpKFs = mpMap->GetAllKeyFrames();
+    sort(vpKFs.begin(),vpKFs.end(),KeyFrame::lId);
+
+    ofstream f_KF, f_loop;
+    f_KF.open(KF_filename.c_str());
+    f_loop.open(loop_filename.c_str());
+    f_KF << fixed;  // 输出的小数按照格式：eg：0.0005
+
+    for(size_t i=0; i<vpKFs.size(); i++)
+    {
+        KeyFrame* pKF = vpKFs[i];
+
+        if(pKF->isBad())
+            continue;
+
+        cv::Mat R = pKF->GetRotation().t();
+        vector<float> q = Converter::toQuaternion(R);
+        cv::Mat t = pKF->GetCameraCenter();
+        f_KF  << pKF->mnId  << " " <<  setprecision(6) << pKF->mTimeStamp << setprecision(7) << " " << t.at<float>(0) << " " << t.at<float>(1) << " " << t.at<float>(2)
+          << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl;  // 先 t，后四元数
+
+        std::set<KeyFrame*> loop_edges = pKF->GetLoopEdges();
+
+        if ( !loop_edges.empty()){
+            for (auto iter = loop_edges.begin(); iter != loop_edges.end(); iter++){
+                f_loop << pKF->mnId << " " << (*iter)->mnId << std::endl;
+            }
+        }
+    }
+
+    f_KF.close();
+    f_loop.close();
+    cout << endl << "trajectory & loop edges  saved!" << endl;
+}
+
 
 void System::SaveKeyFrameTrajectoryTUM(const string &filename)
 {
@@ -399,7 +437,7 @@ void System::SaveKeyFrameTrajectoryTUM(const string &filename)
 
     ofstream f;
     f.open(filename.c_str());
-    f << fixed;
+    f << fixed;  // 输出的小数按照格式：eg：0.0005
 
     for(size_t i=0; i<vpKFs.size(); i++)
     {
@@ -413,8 +451,8 @@ void System::SaveKeyFrameTrajectoryTUM(const string &filename)
         cv::Mat R = pKF->GetRotation().t();
         vector<float> q = Converter::toQuaternion(R);
         cv::Mat t = pKF->GetCameraCenter();
-        f << setprecision(6) << pKF->mTimeStamp << setprecision(7) << " " << t.at<float>(0) << " " << t.at<float>(1) << " " << t.at<float>(2)
-          << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl;
+        f <<  setprecision(6) << pKF->mTimeStamp << setprecision(7) << " " << t.at<float>(0) << " " << t.at<float>(1) << " " << t.at<float>(2)
+          << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl;  // 先 t，后四元数
 
     }
 
