@@ -55,6 +55,16 @@ ${Pangolin_LIBRARIES}
 ${PROJECT_SOURCE_DIR}/../../../Thirdparty/DBoW2/lib/libDBoW2.so
 ${PROJECT_SOURCE_DIR}/../../../Thirdparty/g2o/lib/libg2o.so
 ${PROJECT_SOURCE_DIR}/../../../lib/libORB_SLAM2.so
+-lboost_system
+)
+
+# Node for capture images for camera calibration
+rosbuild_add_executable(CameraCapture
+src/ros_camera_capture.cc
+)
+
+target_link_libraries(CameraCapture
+${LIBS}
 )
 
 # Node for monocular camera
