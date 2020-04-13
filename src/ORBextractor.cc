@@ -59,6 +59,8 @@
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <vector>
+#include <chrono>
+#include<iostream>
 
 #include "ORBextractor.h"
 
@@ -1049,12 +1051,21 @@ void ORBextractor::operator()( InputArray _image, InputArray _mask, vector<KeyPo
     Mat image = _image.getMat();
     assert(image.type() == CV_8UC1 );
 
+    // auto t1 = std::chrono::steady_clock::now();
+
     // Pre-compute the scale pyramid
     ComputePyramid(image);
 
     vector < vector<KeyPoint> > allKeypoints;
     ComputeKeyPointsOctTree(allKeypoints);
     //ComputeKeyPointsOld(allKeypoints);
+
+    // auto t2 = std::chrono::steady_clock::now();
+
+    // auto time_used = std::chrono::duration_cast <std::chrono::duration<double>> (t2 - t1);
+
+    // std::cout << "extract orb points: " << time_used.count() << std::endl;
+
 
     Mat descriptors;
 
